@@ -12,14 +12,17 @@ import (
 	proofcmd "github.com/tendermint/light-client/commands/proofs"
 	"github.com/tendermint/light-client/proofs"
 
-	bccmd "github.com/tendermint/basecoin/cmd/commands"
 	btypes "github.com/tendermint/basecoin/types"
 )
 
+var AccountCmd = &cobra.Command{
+	Use:   "account [address]",
+	Short: "Get details of an account",
+	RunE:  accountCmd,
+}
+
 func init() {
-	//first modify the full node account query command for the light client
-	bccmd.AccountCmd.RunE = accountCmd
-	proofcmd.RootCmd.AddCommand(bccmd.AccountCmd)
+	proofcmd.RootCmd.AddCommand(AccountCmd)
 }
 
 func accountCmd(cmd *cobra.Command, args []string) error {

@@ -3,6 +3,8 @@ package counter
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
+
 	abci "github.com/tendermint/abci/types"
 	"github.com/tendermint/basecoin/types"
 	"github.com/tendermint/go-wire"
@@ -14,8 +16,31 @@ type CounterPluginState struct {
 }
 
 type CounterTx struct {
-	Valid bool
-	Fee   types.Coins
+	Valid bool        `json:"valid"`
+	Fee   types.Coins `json:"fee"`
+}
+
+func (tx CounterTx) Bytes() []byte {
+	return wire.BinaryBytes(&tx)
+}
+
+func (tx CounterTx) ValidateBasic() error {
+	// Validate tx
+	if !tx.Valid {
+		return errors.New("CounterTx.Valid must be true")
+	}
+	if !tx.Fee.IsValid() {
+		return errors.New("CounterTx.Fee is not sorted or has zero amounts")
+	}
+	if !tx.Fee.IsNonnegative() {
+		return errors.New("CounterTx.Fee must be nonnegative")
+	}
+
+	// Did the caller provide enough coins?
+	if !ctx.Coins.IsGTE(tx.Fee) {
+		return errors.New("CounterTx.Fee was not provided")
+	}
+	return nil
 }
 
 //--------------------------------------------------------------------------------
@@ -47,20 +72,9 @@ func (cp *CounterPlugin) RunTx(store types.KVStore, ctx types.CallContext, txByt
 		return abci.ErrBaseEncodingError.AppendLog("Error decoding tx: " + err.Error()).PrependLog("CounterTx Error: ")
 	}
 
-	// Validate tx
-	if !tx.Valid {
-		return abci.ErrInternalError.AppendLog("CounterTx.Valid must be true")
-	}
-	if !tx.Fee.IsValid() {
-		return abci.ErrInternalError.AppendLog("CounterTx.Fee is not sorted or has zero amounts")
-	}
-	if !tx.Fee.IsNonnegative() {
-		return abci.ErrInternalError.AppendLog("CounterTx.Fee must be nonnegative")
-	}
-
-	// Did the caller provide enough coins?
-	if !ctx.Coins.IsGTE(tx.Fee) {
-		return abci.ErrInsufficientFunds.AppendLog("CounterTx.Fee was not provided")
+	err = tx.ValidateBasic()
+	if err != nil {
+		return abci.ErrInternalError.AppendLog("Error during validation: " + err.Error())
 	}
 
 	// TODO If there are any funds left over, return funds.
